@@ -101,8 +101,10 @@ func (t *Task) Run() error {
 	t.Phase = BackupCompleted
 
 	// Delete storage annotations
-	// TODO
-	t.removeStorageResourceAnnotations()
+	err = t.removeStorageResourceAnnotations()
+	if err != nil {
+		return err
+	}
 
 	// Wait on Backup replication.
 	t.Phase = WaitOnBackupReplication
