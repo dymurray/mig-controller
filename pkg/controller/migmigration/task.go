@@ -96,12 +96,13 @@ func (t *Task) Run() error {
 	if t.Backup.Status.Phase != velero.BackupPhaseCompleted {
 		t.Phase = BackupStarted
 		return nil
-	} else {
-		t.Phase = BackupCompleted
 	}
+
+	t.Phase = BackupCompleted
 
 	// Delete storage annotations
 	// TODO
+	t.removeStorageResourceAnnotations()
 
 	// Wait on Backup replication.
 	t.Phase = WaitOnBackupReplication
@@ -123,9 +124,8 @@ func (t *Task) Run() error {
 	if t.Restore.Status.Phase != velero.RestorePhaseCompleted {
 		t.Phase = RestoreStarted
 		return nil
-	} else {
-		t.Phase = RestoreCompleted
 	}
+	t.Phase = RestoreCompleted
 
 	if t.stage() {
 		err = t.deleteStagePods()
