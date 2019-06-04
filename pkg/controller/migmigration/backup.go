@@ -351,8 +351,9 @@ func (t *Task) removeStorageResourceAnnotations() error {
 	if err != nil {
 		return err
 	}
+	pvBackupLabelValue := string(t.PlanResources.MigPlan.UID)
 	labelSelector := map[string]string{
-		// pvBackupLabelKey: pvBackupLabelValue,
+		pvBackupLabelKey: pvBackupLabelValue,
 	}
 	pvcList := corev1.PersistentVolumeClaimList{}
 	options := k8sclient.MatchingLabels(labelSelector)
