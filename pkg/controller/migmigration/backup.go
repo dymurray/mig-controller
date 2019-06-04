@@ -258,7 +258,7 @@ func (t *Task) bounceResticPod() error {
 }
 
 // Annotate all resources with PV action data
-func (t *Task) annotateStorageResources() error {
+func (t *Task) annotateStorageResources(pvBackupLabelValue string) error {
 	// Get client of source cluster
 	client, err := t.getSourceClient()
 	if err != nil {
@@ -351,7 +351,7 @@ func (t *Task) removeStorageResourceAnnotations() error {
 		return err
 	}
 	labelSelector := map[string]string{
-		pvBackupLabelKey: pvBackupLabelValue,
+		// pvBackupLabelKey: pvBackupLabelValue,
 	}
 	pvcList := corev1.PersistentVolumeClaimList{}
 	options := k8sclient.MatchingLabels(labelSelector)

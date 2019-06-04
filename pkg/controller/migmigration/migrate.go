@@ -18,6 +18,7 @@ package migmigration
 
 import (
 	"context"
+	"fmt"
 
 	migapi "github.com/fusor/mig-controller/pkg/apis/migration/v1alpha1"
 )
@@ -34,8 +35,8 @@ const (
 
 // Labels
 const (
-	pvBackupLabelKey   = "openshift.io/pv-backup"
-	pvBackupLabelValue = "transient"
+	pvBackupLabelKey         = "openshift.io/pv-backup"
+	pvBackupLabelValuePrefix = "transient"
 )
 
 // Backup resources.
@@ -54,6 +55,14 @@ func (r *ReconcileMigMigration) migrate(migration *migapi.MigMigration) (bool, e
 	if migration.IsCompleted() {
 		return false, nil
 	}
+
+	migration.Status.SetCondition(migapi.Condition{
+		Type:     "Random",
+		Status:   True,
+		Reason:   migapi.True,
+		Category: migapi.Required,
+		Message:  migration.GetObjectMeta().GetGenerateName(),
+	})
 
 	// Ready
 	plan, err := migration.GetPlan(r)
@@ -88,7 +97,7 @@ func (r *ReconcileMigMigration) migrate(migration *migapi.MigMigration) (bool, e
 		Annotations:     r.getAnnotations(migration),
 		BackupResources: r.getBackupResources(migration),
 	}
-	err = task.Run()
+	err = task.Run(fmt.Sprintf("%s", migration.Name))
 	if err != nil {
 		return false, err
 	}
