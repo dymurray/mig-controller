@@ -56,14 +56,6 @@ func (r *ReconcileMigMigration) migrate(migration *migapi.MigMigration) (bool, e
 		return false, nil
 	}
 
-	migration.Status.SetCondition(migapi.Condition{
-		Type:     "Random",
-		Status:   True,
-		Reason:   migapi.True,
-		Category: migapi.Required,
-		Message:  migration.GetObjectMeta().GetGenerateName(),
-	})
-
 	// Ready
 	plan, err := migration.GetPlan(r)
 	if err != nil {
@@ -97,7 +89,7 @@ func (r *ReconcileMigMigration) migrate(migration *migapi.MigMigration) (bool, e
 		Annotations:     r.getAnnotations(migration),
 		BackupResources: r.getBackupResources(migration),
 	}
-	err = task.Run(fmt.Sprintf("%s", migration.Name))
+	err = task.Run(fmt.Sprintf("Pranav - %s", migration.GetObjectMeta().GetGenerateName()))
 	if err != nil {
 		return false, err
 	}
