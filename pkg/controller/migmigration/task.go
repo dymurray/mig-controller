@@ -66,7 +66,7 @@ type Task struct {
 
 // Run the task.
 // Return `true` when run to completion.
-func (t *Task) Run(migrationName string) error {
+func (t *Task) Run() error {
 	t.logEnter()
 	defer t.logExit()
 	// Mount propagation workaround
@@ -78,7 +78,7 @@ func (t *Task) Run(migrationName string) error {
 	}
 
 	// Annotate persistent storage resources with actions
-	err = t.annotateStorageResources(migrationName)
+	err = t.annotateStorageResources()
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (t *Task) Run(migrationName string) error {
 	t.Phase = BackupCompleted
 
 	// Delete storage annotations
-	// err = t.removeStorageResourceAnnotations()
+	err = t.removeStorageResourceAnnotations()
 	if err != nil {
 		return err
 	}

@@ -18,7 +18,6 @@ package migmigration
 
 import (
 	"context"
-	"fmt"
 
 	migapi "github.com/fusor/mig-controller/pkg/apis/migration/v1alpha1"
 )
@@ -35,8 +34,7 @@ const (
 
 // Labels
 const (
-	pvBackupLabelKey         = "openshift.io/pv-backup"
-	pvBackupLabelValuePrefix = "transient"
+	pvBackupLabelKey = "openshift.io/pv-backup"
 )
 
 // Backup resources.
@@ -89,7 +87,7 @@ func (r *ReconcileMigMigration) migrate(migration *migapi.MigMigration) (bool, e
 		Annotations:     r.getAnnotations(migration),
 		BackupResources: r.getBackupResources(migration),
 	}
-	err = task.Run(fmt.Sprintf("Pranav - %s", migration.GetObjectMeta().GetGenerateName()))
+	err = task.Run()
 	if err != nil {
 		return false, err
 	}

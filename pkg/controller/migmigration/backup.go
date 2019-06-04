@@ -258,12 +258,13 @@ func (t *Task) bounceResticPod() error {
 }
 
 // Annotate all resources with PV action data
-func (t *Task) annotateStorageResources(pvBackupLabelValue string) error {
+func (t *Task) annotateStorageResources() error {
 	// Get client of source cluster
 	client, err := t.getSourceClient()
 	if err != nil {
 		return err
 	}
+	pvBackupLabelValue := string(t.PlanResources.MigPlan.UID)
 	namespaces := t.PlanResources.MigPlan.Spec.Namespaces
 	pvs := t.PlanResources.MigPlan.Spec.PersistentVolumes
 	for _, pv := range pvs.List {
