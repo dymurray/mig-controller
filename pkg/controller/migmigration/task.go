@@ -59,7 +59,6 @@ const (
 	EnsureStageBackup               = "EnsureStageBackup"
 	StageBackupCreated              = "StageBackupCreated"
 	StageBackupFailed               = "StageBackupFailed"
-	DirectVolumeMigrationFailed     = "DirectVolumeMigrationFailed"
 	EnsureInitialBackupReplicated   = "EnsureInitialBackupReplicated"
 	EnsureStageBackupReplicated     = "EnsureStageBackupReplicated"
 	EnsureStageRestore              = "EnsureStageRestore"
@@ -67,7 +66,9 @@ const (
 	StageRestoreFailed              = "StageRestoreFailed"
 	// Direct Volume Migration
 	CreateDirectVolumeMigration            = "CreateDirectVolumeMigration"
+	DirectVolumeMigrationStarted           = "DirectVolumeMigrationStarted"
 	WaitForDirectVolumeMigrationToComplete = "WaitForDirectVolumeMigrationToComplete"
+	DirectVolumeMigrationFailed            = "DirectVolumeMigrationFailed"
 	EnsureFinalRestore                     = "EnsureFinalRestore"
 	FinalRestoreCreated                    = "FinalRestoreCreated"
 	FinalRestoreFailed                     = "FinalRestoreFailed"
@@ -105,6 +106,7 @@ const (
 const (
 	StepPrepare      = "Prepare"
 	StepDirectImage  = "DirectImage"
+	StepDirectVolume = "DirectVolume"
 	StepBackup       = "Backup"
 	StepStageBackup  = "StageBackup"
 	StepStageRestore = "StageRestore"
@@ -132,6 +134,8 @@ var StageItinerary = Itinerary{
 		{Name: EnsureCloudSecretPropagated, Step: StepPrepare},
 		{Name: CreateDirectImageMigration, Step: StepDirectImage, all: DirectImage},
 		{Name: DirectImageMigrationStarted, Step: StepDirectImage, all: DirectImage},
+		{Name: CreateDirectVolumeMigration, Step: StepDirectVolume, all: DirectVolume},
+		{Name: DirectVolumeMigrationStarted, Step: StepDirectVolume, all: DirectVolume},
 		{Name: EnsureStagePodsFromRunning, Step: StepStageBackup, all: HasPVs | IndirectVolume},
 		{Name: EnsureStagePodsFromTemplates, Step: StepStageBackup, all: HasPVs | IndirectVolume},
 		{Name: EnsureStagePodsFromOrphanedPVCs, Step: StepStageBackup, all: HasPVs | IndirectVolume},
@@ -147,6 +151,7 @@ var StageItinerary = Itinerary{
 		{Name: EnsureStageBackupReplicated, Step: StepStageBackup, all: HasStageBackup},
 		{Name: EnsureStageRestore, Step: StepStageRestore, all: HasStageBackup},
 		{Name: StageRestoreCreated, Step: StepStageRestore, all: HasStageBackup},
+		{Name: WaitForDirectVolumeMigrationToComplete, Step: StepDirectVolume, all: DirectVolume},
 		{Name: DeleteRegistries, Step: StepFinal},
 		{Name: EnsureStagePodsDeleted, Step: StepFinal, all: HasStagePods},
 		{Name: EnsureStagePodsTerminated, Step: StepFinal, all: HasStagePods},
@@ -182,6 +187,8 @@ var FinalItinerary = Itinerary{
 		{Name: ResticRestarted, Step: StepStageBackup, all: HasStagePods},
 		{Name: QuiesceApplications, Step: StepStageBackup, all: Quiesce},
 		{Name: EnsureQuiesced, Step: StepStageBackup, all: Quiesce},
+		{Name: CreateDirectVolumeMigration, Step: StepDirectVolume, all: DirectVolume},
+		{Name: DirectVolumeMigrationStarted, Step: StepDirectVolume, all: DirectVolume},
 		{Name: EnsureStageBackup, Step: StepStageBackup, all: HasStageBackup},
 		{Name: StageBackupCreated, Step: StepStageBackup, all: HasStageBackup},
 		{Name: EnsureStageBackupReplicated, Step: StepStageBackup, all: HasStageBackup},
@@ -193,6 +200,7 @@ var FinalItinerary = Itinerary{
 		{Name: EnsureInitialBackupReplicated, Step: StepRestore},
 		{Name: PostBackupHooks, Step: StepRestore},
 		{Name: PreRestoreHooks, Step: StepRestore},
+		{Name: WaitForDirectVolumeMigrationToComplete, Step: StepDirectVolume, all: DirectVolume},
 		{Name: EnsureFinalRestore, Step: StepRestore},
 		{Name: FinalRestoreCreated, Step: StepRestore},
 		{Name: PostRestoreHooks, Step: StepRestore},
@@ -553,6 +561,11 @@ func (t *Task) Run() error {
 			return liberr.Wrap(err)
 		}
 		t.Requeue = PollReQ
+		if err = t.next(); err != nil {
+			return liberr.Wrap(err)
+		}
+	case DirectVolumeMigrationStarted:
+		// FIXME: currently a placefiller
 		if err = t.next(); err != nil {
 			return liberr.Wrap(err)
 		}
@@ -1226,14 +1239,6 @@ func (t *Task) hasDirectVolumes() bool {
 	return false
 }
 
-func (t *Task) hasStageBackup() bool {
-	pvcList := t.getDirectVolumeClaimList()
-	if pvcList != nil {
-		return true
-	}
-	return false
-}
-
 // Get whether the associated plan has imagestreams to be migrated
 func (t *Task) hasImageStreams() (bool, error) {
 	client, err := t.getSourceClient()
@@ -1276,8 +1281,9 @@ func (t *Task) indirectVolumeMigration() bool {
 }
 
 // Returns true if the IndirectVolumeMigration override on the plan is not set (plan is configured to do direct migration)
+// There must exist a set of direct volumes for this to return true
 func (t *Task) directVolumeMigration() bool {
-	return !t.indirectVolumeMigration()
+	return !t.indirectVolumeMigration() && t.hasDirectVolumes()
 }
 
 // Returns true if the migration requires a stage backup

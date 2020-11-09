@@ -5,7 +5,6 @@ import (
 	"errors"
 	migapi "github.com/konveyor/mig-controller/pkg/apis/migration/v1alpha1"
 	dvmc "github.com/konveyor/mig-controller/pkg/controller/directvolumemigration"
-	kapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -98,9 +97,10 @@ func (t *Task) getDirectVolumeClaimList() *[]migapi.PVCToMigrate {
 			continue
 		}
 		accessModes := pv.PVC.AccessModes
+		/* TODO: When access mode selection is available override this
 		if pv.Selection.AccessMode != nil {
 			accessModes = []kapi.PersistentVolumeAccessMode{pv.Selection.AccessMode}
-		}
+		}*/
 		pvcList = append(pvcList, migapi.PVCToMigrate{
 			Name:               pv.PVC.Name,
 			Namespace:          pv.PVC.Namespace,
