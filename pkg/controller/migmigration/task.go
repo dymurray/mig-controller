@@ -59,28 +59,32 @@ const (
 	EnsureStageBackup               = "EnsureStageBackup"
 	StageBackupCreated              = "StageBackupCreated"
 	StageBackupFailed               = "StageBackupFailed"
+	DirectVolumeMigrationFailed     = "DirectVolumeMigrationFailed"
 	EnsureInitialBackupReplicated   = "EnsureInitialBackupReplicated"
 	EnsureStageBackupReplicated     = "EnsureStageBackupReplicated"
 	EnsureStageRestore              = "EnsureStageRestore"
 	StageRestoreCreated             = "StageRestoreCreated"
 	StageRestoreFailed              = "StageRestoreFailed"
-	EnsureFinalRestore              = "EnsureFinalRestore"
-	FinalRestoreCreated             = "FinalRestoreCreated"
-	FinalRestoreFailed              = "FinalRestoreFailed"
-	Verification                    = "Verification"
-	EnsureStagePodsDeleted          = "EnsureStagePodsDeleted"
-	EnsureStagePodsTerminated       = "EnsureStagePodsTerminated"
-	EnsureAnnotationsDeleted        = "EnsureAnnotationsDeleted"
-	EnsureMigratedDeleted           = "EnsureMigratedDeleted"
-	DeleteRegistries                = "DeleteRegistries"
-	DeleteMigrated                  = "DeleteMigrated"
-	DeleteBackups                   = "DeleteBackups"
-	DeleteRestores                  = "DeleteRestores"
-	MigrationFailed                 = "MigrationFailed"
-	Canceling                       = "Canceling"
-	Canceled                        = "Canceled"
-	Rollback                        = "Rollback"
-	Completed                       = "Completed"
+	// Direct Volume Migration
+	CreateDirectVolumeMigration            = "CreateDirectVolumeMigration"
+	WaitForDirectVolumeMigrationToComplete = "WaitForDirectVolumeMigrationToComplete"
+	EnsureFinalRestore                     = "EnsureFinalRestore"
+	FinalRestoreCreated                    = "FinalRestoreCreated"
+	FinalRestoreFailed                     = "FinalRestoreFailed"
+	Verification                           = "Verification"
+	EnsureStagePodsDeleted                 = "EnsureStagePodsDeleted"
+	EnsureStagePodsTerminated              = "EnsureStagePodsTerminated"
+	EnsureAnnotationsDeleted               = "EnsureAnnotationsDeleted"
+	EnsureMigratedDeleted                  = "EnsureMigratedDeleted"
+	DeleteRegistries                       = "DeleteRegistries"
+	DeleteMigrated                         = "DeleteMigrated"
+	DeleteBackups                          = "DeleteBackups"
+	DeleteRestores                         = "DeleteRestores"
+	MigrationFailed                        = "MigrationFailed"
+	Canceling                              = "Canceling"
+	Canceled                               = "Canceled"
+	Rollback                               = "Rollback"
+	Completed                              = "Completed"
 )
 
 // Flags
@@ -325,6 +329,7 @@ func (t *Task) Run() error {
 				return liberr.Wrap(err)
 			}
 		}
+
 	case WaitForRefresh:
 		t.Requeue = PollReQ
 		refreshed := t.waitForRefresh()
@@ -346,7 +351,6 @@ func (t *Task) Run() error {
 		} else {
 			t.Requeue = PollReQ
 		}
-
 	case WaitForRegistriesReady:
 		t.Requeue = PollReQ
 		// First registry health check happens here
@@ -363,7 +367,6 @@ func (t *Task) Run() error {
 		} else {
 			t.Requeue = PollReQ
 		}
-
 	case DeleteRegistries:
 		t.Requeue = PollReQ
 		err := t.deleteImageRegistryResources()
@@ -373,7 +376,6 @@ func (t *Task) Run() error {
 		if err = t.next(); err != nil {
 			return liberr.Wrap(err)
 		}
-
 	case CreateDirectImageMigration:
 		// FIXME: currently a placefiller
 		if err = t.next(); err != nil {
@@ -544,6 +546,39 @@ func (t *Task) Run() error {
 		}
 		if err = t.next(); err != nil {
 			return liberr.Wrap(err)
+		}
+	case CreateDirectVolumeMigration:
+		err := t.createDirectVolumeMigration()
+		if err != nil {
+			return liberr.Wrap(err)
+		}
+		t.Requeue = PollReQ
+		if err = t.next(); err != nil {
+			return liberr.Wrap(err)
+		}
+	case WaitForDirectVolumeMigrationToComplete:
+		dvm, err := t.getDirectVolumeMigration()
+		if err != nil {
+			return liberr.Wrap(err)
+		}
+		// if no dvm, continue to next task
+		if dvm == nil {
+			if err = t.next(); err != nil {
+				return liberr.Wrap(err)
+			}
+		}
+		// Check if DVM is complete and report progress
+		completed, reasons := t.hasDirectVolumeMigrationCompleted(dvm)
+		if completed {
+			if len(reasons) > 0 {
+				t.fail(DirectVolumeMigrationFailed, reasons)
+			} else {
+				if err = t.next(); err != nil {
+					return liberr.Wrap(err)
+				}
+			}
+		} else {
+			t.Requeue = PollReQ
 		}
 	case EnsureStageBackup:
 		_, err := t.ensureStageBackup()
@@ -1177,6 +1212,26 @@ func (t *Task) hasPVs() (bool, bool) {
 		}
 	}
 	return anyPVs, false
+}
+
+// Get whether the associated plan has PVs to be directly migrated
+func (t *Task) hasDirectVolumes() bool {
+	if t.PlanResources.MigPlan.Spec.IndirectVolumeMigration {
+		return false
+	}
+	pvcList := t.getDirectVolumeClaimList()
+	if pvcList != nil {
+		return true
+	}
+	return false
+}
+
+func (t *Task) hasStageBackup() bool {
+	pvcList := t.getDirectVolumeClaimList()
+	if pvcList != nil {
+		return true
+	}
+	return false
 }
 
 // Get whether the associated plan has imagestreams to be migrated
