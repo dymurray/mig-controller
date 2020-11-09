@@ -560,11 +560,18 @@ func (t *Task) Run() error {
 		if err != nil {
 			return liberr.Wrap(err)
 		}
-		t.Requeue = PollReQ
 		if err = t.next(); err != nil {
 			return liberr.Wrap(err)
 		}
 	case DirectVolumeMigrationStarted:
+		dvm, err := t.getDirectVolumeMigration()
+		if err != nil {
+			return liberr.Wrap(err)
+		}
+		// Make sure it exists
+		if dvm == nil {
+			return errors.New("direct volume migration not found")
+		}
 		// FIXME: currently a placefiller
 		if err = t.next(); err != nil {
 			return liberr.Wrap(err)

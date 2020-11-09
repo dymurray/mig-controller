@@ -10,6 +10,14 @@ import (
 )
 
 func (t *Task) createDirectVolumeMigration() error {
+	existingDvm, err := t.getDirectVolumeMigration()
+	if err != nil {
+		return err
+	}
+	// If already created exit with no error
+	if existingDvm != nil {
+		return nil
+	}
 	dvm := t.buildDirectVolumeMigration()
 	if dvm == nil {
 		return errors.New("failed to build directvolumeclaim list")
