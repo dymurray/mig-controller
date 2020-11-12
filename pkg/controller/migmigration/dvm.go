@@ -3,6 +3,7 @@ package migmigration
 import (
 	"context"
 	"errors"
+	"fmt"
 	migapi "github.com/konveyor/mig-controller/pkg/apis/migration/v1alpha1"
 	dvmc "github.com/konveyor/mig-controller/pkg/controller/directvolumemigration"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,6 +53,7 @@ func (t *Task) buildDirectVolumeMigration() *migapi.DirectVolumeMigration {
 			CreateDestinationNamespaces: true,
 		},
 	}
+	t.setDirectVolumeMigrationOwnerReferences(dvm)
 	return dvm
 }
 
@@ -79,23 +81,28 @@ func (t *Task) getDirectVolumeMigration() (*migapi.DirectVolumeMigration, error)
 	return nil, nil
 }
 
-func (t *Task) hasDirectVolumeMigrationCompleted(dvm *migapi.DirectVolumeMigration) (bool, []string) {
-	completed := false
-	reasons := []string{}
-	progress := []string{}
+// Check if the DVM has completed.
+// Returns if it has completed, why it failed, and it's progress results
+func (t *Task) hasDirectVolumeMigrationCompleted(dvm *migapi.DirectVolumeMigration) (completed bool, failureReasons, progress []string) {
+	successfulPods := len(dvm.Status.SuccessfulPods)
+	failedPods := len(dvm.Status.FailedPods)
+	runningPods := len(dvm.Status.RunningPods)
+	totalVolumes := len(dvm.Spec.PersistentVolumeClaims)
+	volumeProgress := fmt.Sprintf("%v total volumes; %v successful; %v running; %v failed", totalVolumes, successfulPods, runningPods, failedPods)
 	switch dvm.Status.Phase {
 	case dvmc.Started:
-		progress = append(progress, "DVM started")
+		// TODO: Update this to check on the associated dvmp resources and build up a progress indicator back to
+		progress = append(progress, fmt.Sprintf("direct volume migration started at %v. ", dvm.Status.StartTimestamp))
 	case dvmc.Completed:
-		progress = append(progress, "DVM completed")
+		progress = append(progress, fmt.Sprintf("%v/%v volume migrations were successful", successfulPods))
 		completed = true
 	case dvmc.MigrationFailed:
-		reasons = append(reasons, "DVM FAILED")
+		failureReasons = append(failureReasons, fmt.Sprintf("direct volume migration failed. %s", volumeProgress))
 		completed = true
 	default:
-		progress = append(progress, "DVM running...")
+		progress = append(progress, volumeProgress)
 	}
-	return completed, reasons
+	return completed, failureReasons, progress
 }
 
 func (t *Task) getDirectVolumeClaimList() *[]migapi.PVCToMigrate {
@@ -120,4 +127,27 @@ func (t *Task) getDirectVolumeClaimList() *[]migapi.PVCToMigrate {
 		return &pvcList
 	}
 	return nil
+}
+
+func (t *Task) setDirectVolumeMigrationOwnerReferences(dvm *migapi.DirectVolumeMigration) {
+	trueVar := true
+	for i := range dvm.OwnerReferences {
+		ref := &dvm.OwnerReferences[i]
+		if ref.Kind == t.Owner.Kind {
+			ref.APIVersion = t.Owner.APIVersion
+			ref.Name = t.Owner.Name
+			ref.UID = t.Owner.UID
+			ref.Controller = &trueVar
+			return
+		}
+	}
+	dvm.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: t.Owner.APIVersion,
+			Kind:       t.Owner.Kind,
+			Name:       t.Owner.Name,
+			UID:        t.Owner.UID,
+			Controller: &trueVar,
+		},
+	}
 }

@@ -588,16 +588,18 @@ func (t *Task) Run() error {
 			}
 		}
 		// Check if DVM is complete and report progress
-		completed, reasons := t.hasDirectVolumeMigrationCompleted(dvm)
+		completed, reasons, progress := t.hasDirectVolumeMigrationCompleted(dvm)
 		if completed {
 			if len(reasons) > 0 {
 				t.fail(DirectVolumeMigrationFailed, reasons)
 			} else {
+				t.setProgress(progress)
 				if err = t.next(); err != nil {
 					return liberr.Wrap(err)
 				}
 			}
 		} else {
+			t.setProgress(progress)
 			t.Requeue = PollReQ
 		}
 	case EnsureStageBackup:
