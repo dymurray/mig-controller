@@ -361,7 +361,7 @@ func (t *Task) createRsyncTransferPods() error {
 	mode := int32(0600)
 
 	// Loop through namespaces and create transfer pod
-	pvcMap := t.getPVCNamespaceMap()
+	pvcMap := t.getDestinationPVCNamespaceMap()
 	for ns, vols := range pvcMap {
 		volumeMounts := []corev1.VolumeMount{}
 		volumes := []corev1.Volume{
@@ -536,14 +536,18 @@ func (t *Task) createRsyncTransferPods() error {
 	return nil
 }
 
-func (t *Task) getPVCNamespaceMap() map[string][]string {
+func (t *Task) getPVCNamespaceMap(destNamespaces bool) map[string][]string {
 	nsMap := map[string][]string{}
 	for _, pvc := range t.Owner.Spec.PersistentVolumeClaims {
-		if vols, exists := nsMap[pvc.Namespace]; exists {
+		namespace := pvc.Namespace
+		if destNamespaces && pvc.TargetNamespace != "" {
+			namespace = pvc.TargetNamespace
+		}
+		if vols, exists := nsMap[namespace]; exists {
 			vols = append(vols, pvc.Name)
-			nsMap[pvc.Namespace] = vols
+			nsMap[namespace] = vols
 		} else {
-			nsMap[pvc.Namespace] = []string{pvc.Name}
+			nsMap[namespace] = []string{pvc.Name}
 		}
 	}
 	return nsMap

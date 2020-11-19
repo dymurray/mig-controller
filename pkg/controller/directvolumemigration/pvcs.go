@@ -11,6 +11,7 @@ import (
 func (t *Task) areSourcePVCsUnattached() error {
 	// This function provides state checking on source PVCs, make sure app is
 	// quiesced
+	// TODO: Is this really needed? Stage workflow functions without quiesce
 	return nil
 }
 
@@ -42,11 +43,15 @@ func (t *Task) createDestinationPVCs() error {
 		newSpec.AccessModes = pvc.TargetAccessModes
 		newSpec.VolumeName = ""
 
+		namespace := pvc.Namespace
+		if pvc.TargetNamespace != "" {
+			namespace = pvc.TargetNamespace
+		}
 		// Create pvc on destination with same metadata + spec
 		destPVC := corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      pvc.Name,
-				Namespace: pvc.Namespace,
+				Namespace: namespace,
 				Labels:    srcPVC.Labels,
 			},
 			Spec: newSpec,
