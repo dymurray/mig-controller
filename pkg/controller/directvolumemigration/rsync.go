@@ -71,7 +71,7 @@ func (t *Task) areRsyncTransferPodsRunning() (bool, error) {
 		return false, err
 	}
 
-	pvcMap := t.getPVCNamespaceMap()
+	pvcMap := t.getPVCNamespaceMap(true)
 
 	selector := labels.SelectorFromSet(map[string]string{
 		"app":     "directvolumemigration-rsync-transfer",
@@ -361,7 +361,7 @@ func (t *Task) createRsyncTransferPods() error {
 	mode := int32(0600)
 
 	// Loop through namespaces and create transfer pod
-	pvcMap := t.getDestinationPVCNamespaceMap()
+	pvcMap := t.getPVCNamespaceMap(true)
 	for ns, vols := range pvcMap {
 		volumeMounts := []corev1.VolumeMount{}
 		volumes := []corev1.Volume{
@@ -577,7 +577,7 @@ func (t *Task) createRsyncClientPods() error {
 		return err
 	}
 
-	pvcMap := t.getPVCNamespaceMap()
+	pvcMap := t.getPVCNamespaceMap(false)
 	for ns, vols := range pvcMap {
 		// Get stunnel svc IP
 		svc := corev1.Service{}
@@ -669,7 +669,7 @@ func (t *Task) createRsyncClientPods() error {
 
 // Create rsync PV progress CR on destination cluster
 func (t *Task) createPVProgressCR() error {
-	pvcMap := t.getPVCNamespaceMap()
+	pvcMap := t.getPVCNamespaceMap(false)
 	trueRef := true
 	for ns, vols := range pvcMap {
 		for _, vol := range vols {
@@ -715,7 +715,7 @@ func (t *Task) haveRsyncClientPodsCompletedOrFailed() (bool, bool, error) {
 	t.Owner.Status.FailedPods = []*corev1.ObjectReference{}
 	t.Owner.Status.SuccessfulPods = []*corev1.ObjectReference{}
 
-	pvcMap := t.getPVCNamespaceMap()
+	pvcMap := t.getPVCNamespaceMap(false)
 	for ns, vols := range pvcMap {
 		for _, vol := range vols {
 			dvmp := migapi.DirectVolumeMigrationProgress{}
@@ -776,12 +776,12 @@ func (t *Task) deleteRsyncResources() error {
 		return err
 	}
 
-	err = t.findAndDeleteResources(srcClient)
+	err = t.findAndDeleteResources(srcClient, false)
 	if err != nil {
 		return err
 	}
 
-	err = t.findAndDeleteResources(destClient)
+	err = t.findAndDeleteResources(destClient, true)
 	if err != nil {
 		return err
 	}
@@ -798,12 +798,12 @@ func (t *Task) deleteRsyncResources() error {
 	return nil
 }
 
-func (t *Task) findAndDeleteResources(client compat.Client) error {
+func (t *Task) findAndDeleteResources(client compat.Client, destinationNamespaces bool) error {
 	// Find all resources with the app label
 	selector := labels.SelectorFromSet(map[string]string{
 		"app": "directvolumemigration-rsync-transfer",
 	})
-	pvcMap := t.getPVCNamespaceMap()
+	pvcMap := t.getPVCNamespaceMap(destinationNamespaces)
 	for ns, _ := range pvcMap {
 		podList := corev1.PodList{}
 		cmList := corev1.ConfigMapList{}
@@ -914,7 +914,7 @@ func (t *Task) findAndDeleteResources(client compat.Client) error {
 }
 
 func (t *Task) deleteProgressReportingCRs(client k8sclient.Client) error {
-	pvcMap := t.getPVCNamespaceMap()
+	pvcMap := t.getPVCNamespaceMap(false)
 
 	for ns, vols := range pvcMap {
 		for _, vol := range vols {
